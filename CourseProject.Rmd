@@ -1,0 +1,84 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "KDiggs86"
+date: "January 19, 2016"
+output: html_document
+---
+###Introduction
+In a study conducted by Ugolino et. al. six participants were asked to perform barbell lifts in multiple ways (in the correct way and in four incorrect ways). Researchers then collected data from accelerometers located on the belt, forearm, and arm of the participants and on the dumbbell that the participants used. The goal of this study is to use the data from the accelerometers to predict whether or not the participants correctly performed the barbell lifts.
+
+For this Coursera project we were give the data set of all observations collected during the barbell experiment. Our goal is to use the data set to predict the manner in which each participant did the exercise. In other words, we want to predict the "classe" variable. 
+
+I started by downloading the training file to my computer and reading it into R. 
+
+```{r, cache=TRUE}
+weight <- read.csv("pml-training.csv")
+```
+
+###Choice of Variables
+This data set has 19,622 observations and 160 variables. So, there is a lot going on in this data set, and I don't understand what many of the variables mean. However, there are really just four sensors (belt, dumbbell, arm and forearm), and then there are a lot of different measurements from each sensor. So, the 160 variables are just the "classe" variable and then various measurements from each of the four sensors. 
+
+After perusing the data I noticed that all four sensors have roll, pitch, and yaw recordings. I googled and learned that these are some of the more important measurements taken by accelerometers. Moreover, these variables are very tidy and so should be easy to work with. Therefore, I decided to predict the "classe" variable using just these 12 variables. 
+
+```{r,cache=TRUE}
+rpy <- subset(weight, select = c("roll_belt", "pitch_belt", "yaw_belt", "roll_arm", "pitch_arm", "yaw_arm", "roll_dumbbell", "pitch_dumbbell", "yaw_dumbbell", "roll_forearm", "pitch_forearm", "yaw_forearm", "classe"))
+head(rpy)
+```
+
+I then created training and test sets from the data.
+
+```{r, cache=TRUE}
+library(caret)
+inTrain <- createDataPartition(y=rpy$classe, p = 0.7, list = FALSE)
+training <- rpy[inTrain,]
+testing <- rpy[-inTrain,]
+```
+ 
+###Exporatory Data Analysis
+
+I wanted to determine if there are any clear patterns amongst the yaw, pitch, roll and classe variables. So, I created a few plots. I first created feature plots for the roll, pitch and yaw variables. I give the feature plots for the roll and pitch variables below. The color gives the classe. The plot for the yaw variables is similar.  Unfortunately, no clear pattern emerged. 
+ 
+```{r, cache= TRUE}
+ featurePlot(x=training[,c("roll_belt", "roll_dumbbell","roll_arm","roll_forearm")],y=training$classe, plot = "pairs")
+ featurePlot(x=training[,c("pitch_belt", "pitch_dumbbell","pitch_arm","pitch_forearm")],y=training$classe, plot = "pairs")
+```
+
+
+To continue my search for patterns I created some scatterplots that were colored by the "classe" variable. They were all similar, and so I only give two of these plots below.
+
+```{r, cache=TRUE}
+ qplot(roll_belt, roll_dumbbell, colour = classe, data = training)
+ qplot(roll_belt, yaw_belt, colour = classe, data = training)
+```
+
+While there seems to be some patterns in the scatterplots, I don't think we can use the patterns to distinguish the color (i.e. classe) of each observation. Therefore, the twelve predictors that I have chosen are weak.
+
+###Boosting to the Rescue!
+Since the predictors are weak, I used a boosting algorithm to create a prediction model. This strategy created a stronger predictor from the weak ones I have chosen.
+
+I used the train function in the caret package with the "gbm" method to create a stochastic gradient boosted model.
+
+```{r, cache = TRUE}
+modFit <- train(classe~., method = "gbm", data = training, verbose = FALSE)
+print(modFit)
+print(modFit$finalModel)
+```
+
+###Error Discussion
+I first used our model to predict the classe variable in the training data and looked at the corresponding confusion matrix. Both the accuracy and concordance (kappa) were greater than 90%. I am happy with that.
+
+```{r, cache=TRUE}
+ confusionMatrix(training$classe, predict(modFit, training))
+```
+ 
+ Since this was encouraging I next applied the model to the testing set that I created. I used the model to predict the classe of each observation and then looked at the corresponding confusion matrix. The accuracy and the concordance remained greater than 90%. Fantastic!
+ 
+```{r, cache=TRUE}
+ confusionMatrix(testing$classe, predict(modFit, testing))
+```
+
+Finally, this model correctly predicted 19 of the 20 test cases on the Project Quiz.
+
+###Improvements
+
+I am pleased with my results, but there are always ways to improve. I ignored 147 variables in building my model, so there is a lot left to explore. If I had more time to devote to this project I would try building multiple gradient boosted  models using different variables. I would then combine the classifiers using the ensembling methods discussed in the "Combining Predictors" lecture.
